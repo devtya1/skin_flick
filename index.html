@@ -1,338 +1,161 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>MISSILE CONTROL — SIMULATION (RED/BLACK PROTOCOL)</title>
+  <meta charset="UTF-8">
+  <title>SkinFlick | Premium Mobile Skins</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <style>
-    /* --- Reset & base --- */
-    :root{
-      --bg:#080607;
-      --panel:#0f0b0c;
-      --accent:#ff2b2b;
-      --accent-dim:#8b1f1f;
-      --glass: rgba(255,255,255,0.02);
-      --glow: 0 0 18px rgba(255,43,43,0.18), inset 0 0 30px rgba(255,10,10,0.03);
-      --mono: "Segoe UI Mono", Consolas, Monaco, monospace;
-    }
-    html,body{height:100%;margin:0;background:linear-gradient(180deg,#060405 0%, #0b0708 60%);font-family:Inter, system-ui, -apple-system, sans-serif;color:#f6f1f1}
-    .app{display:grid;grid-template-columns:420px 1fr 360px;gap:18px;height:100vh;padding:20px;box-sizing:border-box}
-
-    /* Left column */
-    .left{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:12px;padding:18px;box-shadow:var(--glow)}
-    .brand{display:flex;align-items:center;gap:12px}
-    .brand .logo{width:56px;height:56px;border-radius:8px;background:linear-gradient(135deg,#220000,#4b0000);display:flex;align-items:center;justify-content:center;font-weight:700}
-    .brand h1{font-size:18px;margin:0;letter-spacing:1px}
-    .watermark{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,0.06);position:absolute;right:28px;top:20px;transform:rotate(-20deg)}
-
-    .status-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-    .card{background:var(--panel);border:1px solid rgba(255,0,0,0.06);padding:12px;border-radius:10px}
-    .card h3{margin:0;font-size:13px;color:var(--accent)}
-    .big-value{font-size:26px;font-weight:700;margin-top:8px;color:#fff}
-
-    .inventory{margin-top:14px}
-    .missile-row{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);margin-bottom:8px}
-    .bar{height:8px;background:rgba(255,255,255,0.03);border-radius:6px;overflow:hidden;width:110px}
-    .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#ff7b7b);}
-
-    /* center HUD */
-    .center{position:relative;border-radius:12px;padding:16px;background:linear-gradient(180deg,rgba(255,255,255,0.015),transparent);box-shadow:var(--glow);overflow:hidden}
-    .overlay-sim{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;mix-blend-mode:screen}
-    .boot{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(0,0,0,0.6),transparent);z-index:20}
-    .boot pre{color:var(--accent);font-family:var(--mono);font-size:13px;padding:20px;border-radius:8px;border:1px solid rgba(255,0,0,0.06);background:rgba(0,0,0,0.5)}
-
-    .hud-top{display:flex;justify-content:space-between;align-items:center}
-    .clock{font-family:var(--mono);font-size:14px}
-    .controls{display:flex;gap:8px}
-    .btn{padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.05);background:linear-gradient(180deg,#2b0a0a,#1a0606);cursor:pointer;color:#fff;font-weight:600}
-    .btn.red{background:linear-gradient(180deg,#8b0000,#4b0000)}
-
-    /* Radar */
-    .radar-wrap{display:flex;flex-wrap:wrap;gap:18px;margin-top:18px;}
-    .radar{width:340px;height:340px;aspect-ratio:1/1;flex-shrink:0;border-radius:50%;background:radial-gradient(circle at 30% 30%, rgba(255,0,0,0.02), transparent 25%),linear-gradient(180deg, rgba(0,0,0,0.32), transparent);border:2px solid rgba(255,0,0,0.06);position:relative;overflow:hidden;}
-    .grid-circle{position:absolute;inset:10px;border-radius:50%;border:1px dashed rgba(255,0,0,0.04)}
-    .sweep{position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(255,43,43,0.14), rgba(255,43,43,0.00) 40%);transform-origin:50% 50%;animation:sweep 6s linear infinite}
-    @keyframes sweep{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-    .blip{position:absolute;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(255,43,43,0.6)}
-
-    .target-panel{width:100%;max-width:320px;width:320px}
-    .target-screen{height:240px;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);border:1px solid rgba(255,0,0,0.03);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px}
-    .lock-btn{margin-top:10px}
-    .target-locked{color:#fff;font-weight:700}
-
-    /* right column */
-    .right{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:12px;padding:18px;box-shadow:var(--glow);display:flex;flex-direction:column}
-    .auth{display:flex;flex-direction:column;gap:10px}
-    .auth .key{display:flex;align-items:center;gap:10px;padding:12px;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent)}
-    .auth .key input{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px;border-radius:6px;color:#fff}
-    .fingerprint{height:110px;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent);display:flex;align-items:center;justify-content:center;flex-direction:column}
-    .fp-ring{width:72px;height:72px;border-radius:50%;border:2px dashed rgba(255,0,0,0.14);display:flex;align-items:center;justify-content:center}
-
-    .log{flex:1;overflow:auto;margin-top:12px;background:#070405;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.02);font-family:var(--mono);font-size:12px}
-    .log p{margin:6px 0}
-
-    /* launch area */
-    .launch-area{display:flex;flex-direction:column;gap:10px;margin-top:12px}
-    .big-launch{display:flex;align-items:center;justify-content:center;padding:16px;border-radius:8px;background:linear-gradient(90deg,#3b0000,#200000);font-weight:800;font-size:22px;color:#fff}
-
-    /* animations */
-    .pulse{animation:pulse 1.6s infinite}
-    @keyframes pulse{0%{box-shadow:0 0 4px rgba(255,43,43,0.2)}50%{box-shadow:0 0 22px rgba(255,43,43,0.28)}100%{box-shadow:0 0 4px rgba(255,43,43,0.2)}}
-
-    /* console */
-    .console{position:absolute;left:20px;bottom:20px;right:20px;height:130px;background:rgba(0,0,0,0.6);border-radius:8px;padding:10px;border:1px solid rgba(255,0,0,0.04);font-family:var(--mono);font-size:12px;overflow:auto}
-
-    /* responsive */
-    @media(max-width:1100px){.app{grid-template-columns:1fr;grid-auto-rows:470px}}
+    body { font-family: Arial; margin:0; background:#0f172a; color:white; }
+    header { padding:15px; background:black; display:flex; justify-content:space-between; align-items:center; }
+    button { padding:10px 15px; border:none; border-radius:6px; cursor:pointer; }
+    .login { background:#22c55e; }
+    .logout { background:#ef4444; }
+    .container { padding:30px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; }
+    .card { background:#1e293b; padding:15px; border-radius:12px; }
+    img { width:100%; border-radius:10px; }
+    .cart-btn { background:#38bdf8; margin-top:10px; width:100%; }
+    #cartBox, #checkoutBox { background:#020617; padding:20px; border-radius:12px; margin-top:30px; display:none; }
+    input, textarea { width:100%; padding:10px; margin-top:10px; border-radius:6px; border:none; }
   </style>
 </head>
 <body>
-  <div class="watermark">SIMULATION — NO LIVE CONNECTION</div>
-  <div class="app">
-    <!-- LEFT -->
-    <div class="left">
-      <div class="brand"><div class="logo">🔺</div><div><h1>PROTOCOL: RED-VIGIL</h1><div style="font-size:12px;color:rgba(255,255,255,0.6)">High-Security Simulation HUD</div></div></div>
 
-      <div class="status-grid">
-        <div class="card">
-          <h3>System Integrity</h3>
-          <div class="big-value" id="sysIntegrity">99%</div>
-        </div>
-        <div class="card">
-          <h3>Authorization Level</h3>
-          <div class="big-value" id="authLevel">0 of 2</div>
-        </div>
-        <div class="card">
-          <h3>Missile Silos Online</h3>
-          <div class="big-value" id="silos">3</div>
-        </div>
-        <div class="card">
-          <h3>Threat Assessment</h3>
-          <div class="big-value" id="threat">LOW</div>
-        </div>
-      </div>
+<header>
+  <h2>SkinFlick</h2>
+  <div>
+    <button class="login" onclick="googleLogin()">Login with Google</button>
+    <button class="logout" onclick="logout()">Logout</button>
+  </div>
+</header>
 
-      <div class="inventory">
-        <h3 style="color:var(--accent)">Missile Inventory</h3>
-        <div class="missile-row"><div>ICBM-A</div><div style="display:flex;align-items:center;gap:8px"><div class="bar"><i style="width:70%"></i></div><div>7</div></div></div>
-        <div class="missile-row"><div>SLBM-B</div><div style="display:flex;align-items:center;gap:8px"><div class="bar"><i style="width:40%"></i></div><div>3</div></div></div>
-        <div class="missile-row"><div>CRUISE-C</div><div style="display:flex;align-items:center;gap:8px"><div class="bar"><i style="width:55%"></i></div><div>5</div></div></div>
-      </div>
+<div class="container">
+  <h2>Premium Mobile Skins</h2>
+  <div id="products" class="grid"></div>
 
-      <div style="margin-top:14px" class="card">
-        <h3>System Notices</h3>
-        <div style="font-family:var(--mono);font-size:12px;margin-top:8px;color:#ffdede">
-          <div id="notice">All systems nominal. Simulation mode.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- CENTER HUD -->
-    <div class="center">
-      <div class="hud-top"><div class="clock" id="clock">00:00:00</div>
-        <div class="controls">
-          <button class="btn" id="bootBtn">BOOT SEQUENCE</button>
-          <button class="btn" id="encryptBtn">RUN ENCRYPTION</button>
-          <button class="btn red" id="panicBtn">PANIC</button>
-        </div>
-      </div>
-
-      <div class="radar-wrap">
-        <div class="radar" id="radar">
-          <div class="grid-circle"></div>
-          <div class="sweep" aria-hidden></div>
-          <!-- blips injected by JS -->
-        </div>
-
-        <div class="target-panel">
-          <div class="target-screen" id="targetScreen">NO TARGET SELECTED</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn lock-btn" id="autoScan">AUTO-SCAN</button>
-            <button class="btn lock-btn" id="scanLock">LOCK TARGET</button>
-          </div>
-
-          <div style="margin-top:12px" class="card">
-            <h3>Target Details</h3>
-            <div style="font-family:var(--mono);font-size:13px;margin-top:8px">
-              <div>ID: <span id="tID">—</span></div>
-              <div>Distance: <span id="tDist">—</span> km</div>
-              <div>Speed: <span id="tSpeed">—</span> km/h</div>
-              <div>Status: <span id="tStatus">—</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      
-
-      <div class="boot" id="bootOverlay" style="display:none"><pre id="bootText">BOOT SEQUENCE:
-Initializing secure channels...
-Verifying integrity...
-Standing by...</pre></div>
-    </div>
-
-    <!-- RIGHT -->
-    <div class="right">
-      <div class="auth">
-        <div style="font-weight:800;color:var(--accent);">TWO-KEY AUTHORIZATION</div>
-        <div class="key"><div style="width:60px">KEY-A</div><input id="keyA" placeholder="Enter key A code"/></div>
-        <div class="key"><div style="width:60px">KEY-B</div><input id="keyB" placeholder="Enter key B code"/></div>
-        <div style="display:flex;gap:8px"><button class="btn" id="authBtn">AUTHORIZE</button><button class="btn" id="revokeBtn">REVOKE</button></div>
-
-        <div class="fingerprint" style="margin-top:8px">
-          <div style="font-size:13px;margin-bottom:6px">FINGERPRINT SCAN</div>
-          <div class="fp-ring" id="fpRing">🔒</div>
-          <div style="font-size:12px;margin-top:8px;color:rgba(255,255,255,0.6)">Click to simulate biometric scan</div>
-        </div>
-
-        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
-          <button class="btn" id="voiceBtn">VOICE CMD</button>
-          <div style="font-size:12px;color:rgba(255,255,255,0.6)">say: "lock target" / "launch" / "status"</div>
-        </div>
-      </div>
-
-      <div class="log" id="eventLog">
-        <p><strong>EVENTS</strong></p>
-      </div>
-
-      <div class="launch-area">
-        <div class="big-launch pulse" id="launchButton">ARM SYSTEM</div>
-        <div style="display:flex;gap:8px"><button class="btn" id="confirmLaunch">LAUNCH (SIM)</button><button class="btn" id="abortBtn">ABORT</button></div>
-      </div>
-    </div>
+  <div id="cartBox">
+    <h3>Your Cart</h3>
+    <div id="cartItems"></div>
+    <button onclick="checkout()">Proceed to Checkout</button>
   </div>
 
-  <script>
-    // Utility logging
-    const consoleEl = document.getElementById('console');
-    const eventLog = document.getElementById('eventLog');
-    function log(msg){
-      const ts = new Date().toLocaleTimeString();
-      const p = document.createElement('p'); p.textContent = '['+ts+'] '+msg; eventLog.appendChild(p); eventLog.scrollTop = eventLog.scrollHeight;
-    }
-      const p = document.createElement('p'); p.textContent = '['+ts+'] '+msg; eventLog.appendChild(p); eventLog.scrollTop = eventLog.scrollHeight;
-    // Clock
-    function tick(){document.getElementById('clock').textContent = new Date().toLocaleString();}
-    setInterval(tick,1000); tick();
+  <div id="checkoutBox">
+    <h3>Checkout (Fake Payment)</h3>
+    <input placeholder="Full Name" id="name">
+    <textarea placeholder="Address" id="address"></textarea>
+    <button onclick="placeOrder()">COMPLETE PAYMENT ✅</button>
+  </div>
+</div>
 
-    // Boot sequence
-    const bootBtn = document.getElementById('bootBtn'), bootOverlay = document.getElementById('bootOverlay');
-    bootBtn.addEventListener('click',()=>{
-      bootOverlay.style.display='flex';
-      const bootText = document.getElementById('bootText');
-      bootText.textContent='BOOT SEQUENCE:\n';
-      const steps = ['Initializing secure channels','Loading auth modules','Verifying integrity','Starting radar sweep','Warming missile relays (SIM)','All checks passed'];
-      let i=0; const t=setInterval(()=>{ if(i>=steps.length){clearInterval(t); bootText.textContent += '\nSTANDBY'; bootOverlay.style.display='none'; log('Boot sequence complete.'); return;} bootText.textContent += steps[i]+'...\n'; log(steps[i]); i++;},700);
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCA4R4UVTPMRRsZzx3Jf-T-CzYb4bKghsI",
+  authDomain: "skinflick-cbbd9.firebaseapp.com",
+  databaseURL: "https://skinflick-cbbd9-default-rtdb.firebaseio.com",
+  projectId: "skinflick-cbbd9",
+  storageBucket: "skinflick-cbbd9.firebasestorage.app",
+  messagingSenderId: "28484571424",
+  appId: "1:28484571424:web:f724d1a522ec1265c10745"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+let user = null;
+
+// ✅ LOGIN
+function googleLogin(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider);
+}
+
+function logout(){
+  auth.signOut();
+}
+
+// ✅ AUTH STATE
+auth.onAuthStateChanged(u=>{
+  user = u;
+  if(u){
+    alert("Logged in as " + u.displayName);
+    document.getElementById("cartBox").style.display = "block";
+  }
+});
+
+// ✅ LOAD PRODUCTS
+function loadProducts(){
+  db.collection("products").get().then(res=>{
+    let html = "";
+    res.forEach(doc=>{
+      const d = doc.data();
+      html += `
+        <div class="card">
+          <img src="${d.image}">
+          <h3>${d.name}</h3>
+          <p>₹${d.price}</p>
+          <button class="cart-btn" onclick="addToCart('${doc.id}', '${d.name}', ${d.price})">Add to Cart</button>
+        </div>
+      `;
     });
+    document.getElementById("products").innerHTML = html;
+  });
+}
 
-    // Encryption visual
-    document.getElementById('encryptBtn').addEventListener('click',()=>{
-      log('Encryption routine started (visual).');
-      const notice = document.getElementById('notice');
-      notice.textContent='Running AES-SIM encryption...';
-      let dots=0; const id=setInterval(()=>{dots=(dots+1)%4; notice.textContent='Running AES-SIM encryption'+'.'.repeat(dots);},300);
-      setTimeout(()=>{clearInterval(id); notice.textContent='Encryption complete (SIM)'; log('Encryption complete.');},2400);
+// ✅ ADD TO CART
+function addToCart(id,name,price){
+  if(!user) return alert("Please login first!");
+  db.collection("carts").doc(user.uid).collection("items").doc(id).set({
+    name, price
+  });
+  alert("Added to cart ✅");
+}
+
+// ✅ VIEW CART
+function viewCart(){
+  db.collection("carts").doc(user.uid).collection("items").get().then(res=>{
+    let html="";
+    res.forEach(doc=>{
+      const d = doc.data();
+      html += `<p>${d.name} - ₹${d.price}</p>`;
     });
+    document.getElementById("cartItems").innerHTML = html;
+  });
+}
 
-    // Panic
-    document.getElementById('panicBtn').addEventListener('click',()=>{ log('!!! PANIC BUTTON PRESSED (SIM)'); alert('PANIC MODE (SIMULATION)'); });
+// ✅ CHECKOUT
+function checkout(){
+  if(!user) return;
+  document.getElementById("checkoutBox").style.display="block";
+  viewCart();
+}
 
-    // Radar & blips
-    const radar = document.getElementById('radar');
-    function addBlip(x,y,id){
-      const b = document.createElement('div'); b.className='blip'; b.style.left = (x*100)+'%'; b.style.top = (y*100)+'%'; b.dataset.id=id; radar.appendChild(b);
-      setTimeout(()=>{b.style.transform='scale(0.3)'; b.style.opacity='0.6'; setTimeout(()=>b.remove(),3500)},4000);
-    }
-    // simulate random blips
-    setInterval(()=>{
-      const x=Math.random()*0.78+0.11, y=Math.random()*0.78+0.11; addBlip(x,y,'B-'+Math.floor(Math.random()*9000));
-    },1800);
+// ✅ PLACE ORDER (FAKE PAYMENT)
+function placeOrder(){
+  const name = document.getElementById("name").value;
+  const address = document.getElementById("address").value;
+  if(!name || !address) return alert("Fill all fields");
+  
+  db.collection("orders").add({
+    user: user.uid,
+    name, address,
+    date: new Date()
+  });
 
-    // Auto-scan & lock
-    const autoScan = document.getElementById('autoScan'), scanLock = document.getElementById('scanLock');
-    let currentTarget = null;
-    autoScan.addEventListener('click',()=>{
-      log('Auto-scan initiated.');
-      // fake target
-      const id='TGT-'+Math.floor(Math.random()*90000);
-      currentTarget={id:id,dist:Math.floor(Math.random()*4000)+120,spd:Math.floor(Math.random()*1300)+200};
-      document.getElementById('tID').textContent=currentTarget.id; document.getElementById('tDist').textContent=currentTarget.dist; document.getElementById('tSpeed').textContent=currentTarget.spd; document.getElementById('tStatus').textContent='TRACKED';
-      document.getElementById('targetScreen').textContent='TRACKING: '+currentTarget.id;
-      log('Target acquired: '+currentTarget.id+' @ '+currentTarget.dist+' km');
-    });
+  alert("Payment Successful ✅ Order Placed!");
+}
 
-    scanLock.addEventListener('click',()=>{
-      if(!currentTarget){log('No target to lock.'); return;} log('Attempting target lock: '+currentTarget.id);
-      document.getElementById('targetScreen').textContent='LOCKED: '+currentTarget.id; document.getElementById('tStatus').textContent='LOCKED';
-      // visual lock pulse
-      const lockPulse = document.createElement('div'); lockPulse.style.position='absolute'; lockPulse.style.left='50%'; lockPulse.style.top='50%'; lockPulse.style.transform='translate(-50%,-50%)'; lockPulse.style.width='320px'; lockPulse.style.height='220px'; lockPulse.style.border='2px solid rgba(255,43,43,0.25)'; lockPulse.style.borderRadius='8px'; lockPulse.style.animation='pulse 800ms ease-out 3'; lockPulse.style.pointerEvents='none'; document.querySelector('.center').appendChild(lockPulse);
-      setTimeout(()=>lockPulse.remove(),2600);
-    });
+// ✅ AUTO CREATE SAMPLE PRODUCTS (RUN ONLY ONCE)
+db.collection("products").get().then(snap=>{
+  if(snap.empty){
+    db.collection("products").add({name:"Blue Carbon Skin", price:299, image:"https://i.imgur.com/0Z8YpA2.jpg"});
+    db.collection("products").add({name:"Matte Black Skin", price:249, image:"https://i.imgur.com/UwL3p7E.jpg"});
+    db.collection("products").add({name:"Anime Skin", price:349, image:"https://i.imgur.com/Y2uZz9o.jpg"});
+  }
+  loadProducts();
+});
+</script>
 
-    // Auth
-    const keyA = document.getElementById('keyA'), keyB = document.getElementById('keyB'), authBtn = document.getElementById('authBtn'), revokeBtn = document.getElementById('revokeBtn');
-    let authorized=false;
-    authBtn.addEventListener('click',()=>{
-      if(keyA.value.trim()==='RED123' && keyB.value.trim()==='VIGIL456'){
-        authorized=true; document.getElementById('authLevel').textContent='2 of 2'; document.getElementById('fpRing').textContent='🔓'; log('Two-key authorization granted.');
-        document.getElementById('launchButton').textContent='SYSTEM ARMED'; document.getElementById('launchButton').classList.add('pulse');
-      } else {
-        log('Authorization failed. Incorrect keys (use RED123 & VIGIL456 for SIM).'); alert('Authorization failed (SIM).');
-      }
-    });
-    revokeBtn.addEventListener('click',()=>{authorized=false; document.getElementById('authLevel').textContent='0 of 2'; document.getElementById('fpRing').textContent='🔒'; document.getElementById('launchButton').textContent='ARM SYSTEM'; log('Authorization revoked.');});
-
-    // Fingerprint (simulated)
-    document.getElementById('fpRing').addEventListener('click',()=>{
-      if(!authorized){log('Fingerprint attempt denied: keys not authorized.'); alert('Enter valid keys first (SIM).'); return;} log('Biometric scan: success (SIM).'); document.getElementById('fpRing').textContent='✅';
-      document.getElementById('authLevel').textContent='2 of 2 (BIO)';
-    });
-
-    // Voice commands (simple)
-    const voiceBtn = document.getElementById('voiceBtn');
-    let recognizing=false;
-    voiceBtn.addEventListener('click',()=>{
-      if(!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)){
-        const cmd = prompt('Speech recognition not supported. Type a voice command: (lock target / launch / status)'); handleVoice(cmd); return;
-      }
-      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const r = new SpeechRec(); r.lang='en-US'; r.interimResults=false; r.maxAlternatives=1;
-      r.onresult = (e)=>{ const t = e.results[0][0].transcript.toLowerCase(); log('Voice input: '+t); handleVoice(t); }
-      r.onerror = (e)=>{ log('Voice recognition error: '+e.error); }
-      r.start(); log('Voice recognition started (listening)...');
-    });
-    function handleVoice(t){ if(!t) return; t=t.trim(); if(t.includes('lock')){ document.getElementById('scanLock').click(); } else if(t.includes('launch')){ document.getElementById('confirmLaunch').click(); } else if(t.includes('status')){ alert('Status:\nIntegrity:'+document.getElementById('sysIntegrity').textContent+'\nAuth:'+document.getElementById('authLevel').textContent); } else log('Unknown voice command: '+t); }
-
-    // Launch (UI-only simulation)
-    const confirmLaunch = document.getElementById('confirmLaunch');
-    confirmLaunch.addEventListener('click',()=>{
-      if(!authorized){ log('Launch attempt blocked: Not authorized.'); alert('SYSTEM NOT AUTHORIZED (SIM).'); return; }
-      if(!currentTarget || document.getElementById('tStatus').textContent!=='LOCKED'){ log('Launch attempt blocked: No locked target.'); alert('No target locked (SIM).'); return; }
-      // two-step confirmation modal (simulate)
-      const ok = confirm('CONFIRM LAUNCH (SIMULATION): This is a UI-only animation. Proceed?'); if(!ok){ log('Launch aborted by operator.'); return; }
-      log('LAUNCH SEQUENCE INITIATED (SIM). Target: '+currentTarget.id);
-      // animate UI: red flash, console events
-      const overlay = document.createElement('div'); overlay.style.position='fixed'; overlay.style.inset=0; overlay.style.background='rgba(0,0,0,0.8)'; overlay.style.display='flex'; overlay.style.alignItems='center'; overlay.style.justifyContent='center'; overlay.style.zIndex=9999; document.body.appendChild(overlay);
-      const anim = document.createElement('div'); anim.style.width='80%'; anim.style.height='60%'; anim.style.background='linear-gradient(180deg,#420000,#120000)'; anim.style.border='4px solid rgba(255,43,43,0.18)'; anim.style.borderRadius='12px'; anim.style.display='flex'; anim.style.flexDirection='column'; anim.style.alignItems='center'; anim.style.justifyContent='center'; anim.style.color='#fff'; overlay.appendChild(anim);
-      const t1 = document.createElement('div'); t1.style.fontFamily='var(--mono)'; t1.style.fontSize='24px'; t1.textContent='LAUNCH AUTHORIZED — COUNTDOWN'; anim.appendChild(t1);
-      const count = document.createElement('div'); count.style.fontSize='84px'; count.style.fontWeight=900; count.style.marginTop='18px'; anim.appendChild(count);
-      let c=10; count.textContent=c; const cInt=setInterval(()=>{ c--; count.textContent=c; log('T-'+c); if(c<=0){ clearInterval(cInt); t1.textContent='FIRE (SIM)'; const boom = document.createElement('div'); boom.textContent='✴️ MISSILE VISUAL (SIM) ✴️'; boom.style.fontSize='34px'; setTimeout(()=>{ overlay.remove(); log('Launch animation complete (SIM). Target neutralized (sim).'); document.getElementById('tStatus').textContent='ENGAGED (SIM)'; },2200); }},1000);
-    });
-
-    // Abort
-    document.getElementById('abortBtn').addEventListener('click',()=>{ log('Abort requested. Clearing locks and de-arming.'); document.getElementById('tStatus').textContent='ABORTED'; document.getElementById('targetScreen').textContent='NO TARGET SELECTED'; currentTarget=null; });
-
-    // Simple security: hint keys
-    
-
-    // Small accessibility: keyboard shortcuts
-    document.addEventListener('keydown',(e)=>{
-      if(e.key==='l') document.getElementById('scanLock').click();
-      if(e.key==='s') document.getElementById('autoScan').click();
-      if(e.key==='a') document.getElementById('authBtn').click();
-      if(e.key==='Enter') document.getElementById('confirmLaunch').click();
-    });
-
-  </script>
 </body>
 </html>
